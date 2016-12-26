@@ -1,19 +1,18 @@
-import org.apache.tinkerpop.gremlin.process.traversal.Scope;
 import org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.GraphTraversalSource;
 import org.apache.tinkerpop.gremlin.structure.Graph;
 import org.apache.tinkerpop.gremlin.structure.Vertex;
 import org.apache.tinkerpop.gremlin.tinkergraph.structure.TinkerGraph;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import static org.apache.tinkerpop.gremlin.process.traversal.Operator.assign;
-import static org.apache.tinkerpop.gremlin.process.traversal.Operator.div;
-import static org.apache.tinkerpop.gremlin.process.traversal.Operator.mult;
 import static org.apache.tinkerpop.gremlin.process.traversal.P.eq;
+import static org.apache.tinkerpop.gremlin.process.traversal.Scope.local;
 import static org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.constant;
+import static org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.count;
 import static org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.label;
 import static org.apache.tinkerpop.gremlin.process.traversal.dsl.graph.__.select;
-import static org.apache.tinkerpop.gremlin.structure.T.label;
 
 /**
  * @author Daniel Kuppitz (http://gremlin.guru)
@@ -68,6 +67,7 @@ public class App {
     }
 
     public static double matchability2(GraphTraversalSource g, Vertex a, Vertex b) {
+        /*
         return g.withSack(0).V(a).outE().aggregate("x").by(label).limit(1)
                 .V(b).outE().as("e").label().as("l").where(select("x").unfold().as("l"))
                 .store("matchedQues").by(constant(1))
@@ -77,7 +77,16 @@ public class App {
                 .sack(assign).by(select("matchedAns").count(Scope.local))
                 .sack(mult).by(constant(100))
                 .sack(div).by(select("matchedQues").count(Scope.local)).<Long>sack()
-                .tryNext().orElse(0L);
+                .tryNext().orElse(0L);*/
+        final Set<String> x = g.V(a).outE().label().toSet();
+        final Map<String, Long> m = g.withSideEffect("x", x).V(b).outE().as("e").label().as("l")
+                .where(select("x").unfold().as("l"))
+                .store("matchedQues").by(constant(1))
+                .constant(a).outE().where(label().as("l")).inV().as("a1")
+                .select("e").inV().as("a2").filter(select("a1", "a2").by("ans").where("a1", eq("a2")))
+                .aggregate("matchedAns").by(constant(1)).cap("matchedAns", "matchedQues")
+                .<Long>select("matchedAns", "matchedQues").by(count(local)).next();
+        return (m.get("matchedAns") * 100) / m.get("matchedQues");
     }
 
     public static void main(String[] args) throws Exception {
